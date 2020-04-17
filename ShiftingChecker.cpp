@@ -10,9 +10,9 @@ using namespace ento;
 using namespace taint;
 
 namespace {
-class ShiftingChecker : public Checker< check::PreStmt<BinaryOperator> > {
+class ShiftingChecker : public Checker<check::PreStmt<BinaryOperator>> {
   mutable std::unique_ptr<BuiltinBug> BT;
-  void reportBug(const char *Msg, CheckerContext &C,
+  void reportBug(const char *Msg, ProgramStateRef StateZero, CheckerContext &C,
                  std::unique_ptr<BugReporterVisitor> Visitor = nullptr) const;
 
 public:
@@ -28,11 +28,11 @@ static const Expr *getRHSExpr(const ExplodedNode *N) {
 }
 
 void ShiftingChecker::reportBug(
-    const char *Msg, CheckerContext &C,
+    const char *Msg, ProgramStateRef StateZero, CheckerContext &C,
     std::unique_ptr<BugReporterVisitor> Visitor) const {
-  if (ExplodedNode *N = C.generateErrorNode()) {
+  if (ExplodedNode *N = C.generateErrorNode(StateZero)) {
     if (!BT)
-      BT.reset(new BuiltinBug(this, "Improper shifting"));
+      BT.reset(new BuiltinBug(this, "Invalid shift operation"));
 
     auto R = std::make_unique<PathSensitiveBugReport>(*BT, Msg, N);
     R->addVisitor(std::move(Visitor));
@@ -42,59 +42,84 @@ void ShiftingChecker::reportBug(
 }
 
 void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
-                                  CheckerContext &C) const {
+                                   CheckerContext &C) const {
   BinaryOperator::Opcode Op = B->getOpcode();
-  if (Op != BO_Shl &&
-      Op != BO_Shr &&
-      Op != BO_ShlAssign &&
-      Op != BO_ShrAssign)
+
+  // If this isn't shifting operation, leave.
+  if (Op != BO_Shl && Op != BO_Shr && Op != BO_ShlAssign && Op != BO_ShrAssign)
     return;
+
   // If we get here, check for negative shifting or
   // shifting with overflow.
-  Expr* rightSide = B->getRHS();
-  QualType typeOfRHS = B->getRHS()->getType();
+  Expr *RightSideExpr = B->getRHS();
+  QualType TypeOfRHS = B->getRHS()->getType();
 
-  if (!typeOfRHS->isScalarType())
+  if (!TypeOfRHS->isScalarType())
     return;
 
-  // SVal rightSide = C.getSVal(B->getRHS());
-  // Optional<DefinedSVal> DV = rightSide.getAs<DefinedSVal>();
-
-
-  // Shifting-by-undefined is handled in the generic checking for uses of
-  // undefined values.
-  //  if (!DV)
-  //  return;
-
-  // Check for improper shifting.
-  // ConstraintManager &CM = C.getConstraintManager();
-  // ProgramStateRef stateNotImproper, stateImproper;
-  // std::tie(stateNotImproper, stateImproper) = CM.assumeInclusiveRange(C.getState(), 0 < *DV);
-
-
-
-  // if (!stateNotImproper) {
-  //   assert(stateImproper);
-  //   reportBug("Shifting by a negative or value too large", stateImproper, C);
-  //   return;
-  // }
-
-
-  if(typeOfRHS->isSignedIntegerType() && C.isNegative(rightSide)){
-    reportBug("Shifting by a negative value", C);
+  if (TypeOfRHS->isSignedIntegerType() && C.isNegative(RightSideExpr)) {
+    reportBug("Shifting by a negative value", C.getState(), C);
     return;
   }
 
-  // bool TaintedD = isTainted(C.getState(), *DV);
-  // if ((stateNotImproper && stateImproper && TaintedD)) {
-  //   reportBug("Shifting by a tainted value, possibly improper", C,
-  //             llvm::make_unique<taint::TaintBugVisitor>(*DV));
-  //   return;
-  // }
+  if (!TypeOfRHS->isIntegerType() || !TypeOfRHS->isIntegerType())
+    return;
 
-  // If we get here, then the righthand side should not be improper. We abandon the
-  // improper shifting     case for now.
-  //C.addTransition(stateNotImproper);
+  ASTContext &ACtx = C.getASTContext();
+
+  const Expr *RHS = B->getRHS();
+  const LocationContext *LC = C.getLocationContext();
+  SVal RhsSVal = C.getState()->getSVal(RHS, LC);
+
+  const Expr *LHS = B->getLHS();
+  LHS = LHS->IgnoreImpCasts();
+
+  // Extract bit width of left hand side type.
+  const QualType TypeOfLHS = LHS->getType();
+
+  if (TypeOfLHS.isNull())
+    return;
+
+  uint64_t BitWidth = ACtx.getTypeInfo(TypeOfLHS.getTypePtr()).Width;
+
+  // Make symbolic integer value that represents maximum value which can be used
+  // in shifting of the type of the left hand side.
+  llvm::APInt LLVMIntegerBitWidth = llvm::APInt(32, BitWidth);
+  SValBuilder &SVB = C.getSValBuilder();
+  nonloc::ConcreteInt MaxShiftingSVal = SVB.makeIntVal(
+      clang::IntegerLiteral::Create(C.getASTContext(), LLVMIntegerBitWidth,
+                                    B->getRHS()->getType(), SourceLocation()));
+
+  SVal InvalidShiftOperation =
+      SVB.evalBinOp(C.getState(), BO_GE, RhsSVal, MaxShiftingSVal, ACtx.BoolTy);
+
+  Optional<DefinedSVal> DV = InvalidShiftOperation.getAs<DefinedSVal>();
+
+  if (!DV)
+    return;
+
+  ConstraintManager &CM = C.getConstraintManager();
+  ProgramStateRef StateTrue, StateFalse;
+  // StateTrue represents state in which symbolic value that represents valid
+  // shifting operation is true
+  // StateFalse represents state in which symbolic value that represents valid
+  // shifting operation is false
+  std::tie(StateTrue, StateFalse) = CM.assumeDual(C.getState(), *DV);
+
+  if (!StateFalse) {
+    assert(StateTrue);
+    reportBug("Invalid shift operation", StateFalse, C);
+    return;
+  }
+
+  bool TaintedD = isTainted(C.getState(), *DV);
+  if ((StateFalse && StateTrue && TaintedD)) {
+    reportBug("Shifted by a tainted value", StateFalse, C,
+              std::make_unique<taint::TaintBugVisitor>(*DV));
+    return;
+  }
+
+  C.addTransition(StateFalse);
 }
 
 void ento::registerShiftingChecker(CheckerManager &mgr) {
