@@ -34,7 +34,7 @@ Both `clang` and `clang++` can be found in `llvm-project/build/bin`.
 
 ## Testing
 
-ShiftingChecker can be tested via `clang-lit` by running:
+ShiftingChecker can be tested via `llvm-lit` by running:
 
 ```
 llvm-project/build/bin/llvm-lit <Absolute path to shifting-validation.c> -a
