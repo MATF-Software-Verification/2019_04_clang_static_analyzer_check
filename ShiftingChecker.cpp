@@ -45,11 +45,12 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
                                    CheckerContext &C) const {
   BinaryOperator::Opcode Op = B->getOpcode();
 
-  // If this isn't shifting operation, leave.
+  // If B isn't a shifting operation, leave.
   if (Op != BO_Shl && Op != BO_Shr && Op != BO_ShlAssign && Op != BO_ShrAssign)
     return;
 
-  // If we get here, check for negative shifting or
+  // When B is a shifting operator, 
+  // check for negative shifting or
   // shifting with overflow.
   Expr *RightSideExpr = B->getRHS();
   QualType TypeOfRHS = B->getRHS()->getType();
@@ -74,7 +75,7 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
   const Expr *LHS = B->getLHS();
   LHS = LHS->IgnoreImpCasts();
 
-  // Extract bit width of left hand side type.
+  // Extract type of the left hand side.
   const QualType TypeOfLHS = LHS->getType();
 
   if (TypeOfLHS.isNull())
