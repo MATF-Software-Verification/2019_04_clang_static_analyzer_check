@@ -12,7 +12,8 @@ using namespace taint;
 namespace {
 class ShiftingChecker : public Checker<check::PreStmt<BinaryOperator>> {
   mutable std::unique_ptr<BuiltinBug> BT;
-  void reportBug(const char *Msg, ProgramStateRef StateZero, CheckerContext &C,
+  void reportBug(const std::string &Msg, ProgramStateRef StateZero,
+                 CheckerContext &C,
                  std::unique_ptr<BugReporterVisitor> Visitor = nullptr) const;
 
 public:
@@ -28,13 +29,13 @@ static const Expr *getRHSExpr(const ExplodedNode *N) {
 }
 
 void ShiftingChecker::reportBug(
-    const char *Msg, ProgramStateRef StateZero, CheckerContext &C,
+    const std::string &Msg, ProgramStateRef StateFalse, CheckerContext &C,
     std::unique_ptr<BugReporterVisitor> Visitor) const {
-  if (ExplodedNode *N = C.generateErrorNode(StateZero)) {
+  if (ExplodedNode *N = C.generateErrorNode(StateFalse)) {
     if (!BT)
       BT.reset(new BuiltinBug(this, "Invalid shift operation"));
 
-    auto R = std::make_unique<PathSensitiveBugReport>(*BT, Msg, N);
+    auto R = std::make_unique<PathSensitiveBugReport>(*BT, Msg.c_str(), N);
     R->addVisitor(std::move(Visitor));
     bugreporter::trackExpressionValue(N, getRHSExpr(N), *R);
     C.emitReport(std::move(R));
@@ -49,7 +50,7 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
   if (Op != BO_Shl && Op != BO_Shr && Op != BO_ShlAssign && Op != BO_ShrAssign)
     return;
 
-  // When B is a shifting operator, 
+  // When B is a shifting operator,
   // check for negative shifting or
   // shifting with overflow.
   Expr *RightSideExpr = B->getRHS();
@@ -109,7 +110,11 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
 
   if (!StateFalse) {
     assert(StateTrue);
-    reportBug("Invalid shift operation", StateFalse, C);
+    reportBug("Invalid shift operation. Type '" +
+                  TypeOfLHS.getUnqualifiedType().getAsString() +
+                  "' can't be shifted by more than '" +
+                  std::to_string(BitWidth - 1) + "' bits",
+              StateFalse, C);
     return;
   }
 
@@ -119,8 +124,6 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
               std::make_unique<taint::TaintBugVisitor>(*DV));
     return;
   }
-
-  C.addTransition(StateFalse);
 }
 
 void ento::registerShiftingChecker(CheckerManager &mgr) {
