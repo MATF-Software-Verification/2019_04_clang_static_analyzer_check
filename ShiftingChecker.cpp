@@ -66,7 +66,7 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
     return;
 
   if (TypeOfRHS->isSignedIntegerType() && C.isNegative(RightSideExpr)) {
-    reportBug("Shifting by a negative value", C.getState(), C);
+    reportBug("Shifting by a negative value", C);
     return;
   }
 
@@ -88,15 +88,7 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
   if (TypeOfLHS.isNull())
     return;
 
-  // Second paragraph in this rule rationale states following:
-  // "The precision of an integer type is the number of bits it uses to
-  // represent values, excluding any sign and padding bits. For unsigned integer
-  // types, the width and the precision are the same; whereas for signed integer
-  // types, the width is one greater than the precision."
-  uint64_t TypePrecision =
-      TypeOfLHS->isSignedIntegerType()
-          ? ACtx.getTypeInfo(TypeOfLHS.getTypePtr()).Width + 1
-          : ACtx.getTypeInfo(TypeOfLHS.getTypePtr()).Width;
+  uint64_t TypePrecision = ACtx.getTypeInfo(TypeOfLHS.getTypePtr()).Width;
 
   // Make symbolic integer value that represents maximum value which can be used
   // in shifting of the type of the left hand side.

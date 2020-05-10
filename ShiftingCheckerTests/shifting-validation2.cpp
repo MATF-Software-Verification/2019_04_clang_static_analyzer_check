@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=alpha.unix.ShiftingChecker -verify %s
+// RUN: %clang_analyze_cc1 -Wno-unused -analyzer-checker=alpha.unix.ShiftingChecker -verify %s
 
 void test()
 {
@@ -6,5 +6,3 @@ void test()
     int a  = -1;
     x << a; // expected-warning {{Shifting by a negative value}}
 }
-
-// expected-warning@7 {{expression result unused}}

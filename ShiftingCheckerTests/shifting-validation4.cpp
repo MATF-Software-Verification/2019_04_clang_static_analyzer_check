@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=alpha.unix.ShiftingChecker -verify %s
+// RUN: %clang_analyze_cc1 -Wno-unused -analyzer-checker=alpha.unix.ShiftingChecker -verify %s
 
 void fn(char &a) { a++; }
 void test()
@@ -10,5 +10,3 @@ void test()
     x << a; // expected-warning {{Invalid shift operation. Type 'char' can't be shifted by more than '7' bits}}
 
 }
-
-// expected-warning@10 {{expression result unused}}
