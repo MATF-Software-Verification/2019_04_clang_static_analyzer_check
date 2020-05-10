@@ -7,6 +7,6 @@ void test()
     int c;
 
     if(c){
-    x << a; // expected-warning {{Invalid shift operation. Type 'int' can't be shifted by more than '31' bits}}
+    x << a; // expected-warning {{Invalid shift operation. Type 'int' can't be shifted by more than '30' bits}}
     }
 }

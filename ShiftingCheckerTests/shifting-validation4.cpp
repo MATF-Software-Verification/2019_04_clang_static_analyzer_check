@@ -7,6 +7,6 @@ void test()
     char a  = 7;
     int c;
     fn(a);
-    x << a; // expected-warning {{Invalid shift operation. Type 'char' can't be shifted by more than '7' bits}}
+    x << a; // expected-warning {{Invalid shift operation. Type 'char' can't be shifted by more than '6' bits}}
 
 }
