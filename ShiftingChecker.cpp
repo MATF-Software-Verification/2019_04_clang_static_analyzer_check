@@ -59,28 +59,24 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
   // When B is a shifting operator,
   // check for negative shifting or
   // shifting with overflow.
-  Expr *RightSideExpr = B->getRHS();
-  QualType TypeOfRHS = B->getRHS()->getType();
+  const Expr *RHS = B->getRHS();
+  QualType TypeOfRHS = RHS->getType();
 
-  if (!TypeOfRHS->isScalarType())
+  const Expr *LHS = B->getLHS();
+  LHS = LHS->IgnoreImpCasts();
+
+  if (!TypeOfRHS->isScalarType() || !TypeOfRHS->isIntegerType())
     return;
 
-  if (TypeOfRHS->isSignedIntegerType() && C.isNegative(RightSideExpr)) {
+  if (TypeOfRHS->isSignedIntegerType() && C.isNegative(RHS)) {
     reportBug("Shifting by a negative value", C);
     return;
   }
 
-  if (!TypeOfRHS->isIntegerType() || !TypeOfRHS->isIntegerType())
-    return;
-
   ASTContext &ACtx = C.getASTContext();
 
-  const Expr *RHS = B->getRHS();
   const LocationContext *LC = C.getLocationContext();
   SVal RhsSVal = C.getState()->getSVal(RHS, LC);
-
-  const Expr *LHS = B->getLHS();
-  LHS = LHS->IgnoreImpCasts();
 
   // Extract type of the left hand side.
   const QualType TypeOfLHS = LHS->getType();
@@ -106,7 +102,7 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
   SValBuilder &SVB = C.getSValBuilder();
   nonloc::ConcreteInt MaxShiftingSVal =
       SVB.makeIntVal(clang::IntegerLiteral::Create(
-          C.getASTContext(), TypePrecisionAsLLVMInteger, B->getRHS()->getType(),
+          C.getASTContext(), TypePrecisionAsLLVMInteger, TypeOfRHS, 
           SourceLocation()));
 
   SVal InvalidShiftOperation =
