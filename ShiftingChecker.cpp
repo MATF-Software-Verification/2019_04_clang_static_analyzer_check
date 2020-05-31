@@ -134,7 +134,7 @@ void ShiftingChecker::checkPreStmt(const BinaryOperator *B,
   bool TaintedD = isTainted(C.getState(), *DV);
   if (StateFalse && StateTrue) {
     (TaintedD == true)
-        ? reportBug("Shifing with a tainted value", C,
+        ? reportBug("Shifting with a tainted value", C,
                     std::make_unique<taint::TaintBugVisitor>(*DV))
         : reportBug("Shifting with an undefined value", C);
     return;

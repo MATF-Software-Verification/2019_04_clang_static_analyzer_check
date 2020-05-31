@@ -8,7 +8,7 @@ void test()
     int a;
 
     fscanf(stdin, "%d", &a);
-    x << a; // expected-warning {{Shifing with a tainted value}}
+    x << a; // expected-warning {{Shifting with a tainted value}}
 }
 
 // expected-warning@11 2 {{tainted}}
