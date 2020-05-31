@@ -1,4 +1,4 @@
-// RUN: %clang_analyze_cc1 -Wno-unused -analyzer-checker=alpha.unix.ShiftingChecker -verify %s
+// RUN: %clang_analyze_cc1 -Wno-unused -analyzer-checker=alpha.unix.ShiftingChecker,alpha.security.taint -verify %s
 
 #include "Inputs/system-header-simulator.h"
 
